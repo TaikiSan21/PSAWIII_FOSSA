@@ -47,7 +47,7 @@ More information on the specifics of that can be found here:
 
 https://taikisan21.github.io/PAMpal/StandardCalcs.html
 
-```{r, cache=TRUE}
+```{r eval=1}
 library(PAMpal)
 pps <- PAMpalSettings()
 ```
@@ -60,7 +60,7 @@ for future reference. More information on that here (this is an optional but rec
 https://taikisan21.github.io/PAMpal/PAMpalSettings.html
 
 
-```{r}
+```{r, eval=FALSE}
 pps <- addSettings(pps, 'XMLSettings.xml')
 ```
 
@@ -99,7 +99,7 @@ serves no purpose other than attaching an informative name to your data to help 
 what was going on. This processing can take quite a long time (here we are working on ~1M detections),
 so I recommend that you save this object.
 
-```{r}
+```{r, eval=1}
 events <- read.csv('TrainingEvents.csv', stringsAsFactors = FALSE)
 View(events)
 data <- processPgDetections(pps, mode='time', grouping=events, id='PSAWIII_Training')
@@ -132,7 +132,7 @@ data
 
 Okay, so lets take a look at what we have. 
 
-```{r}
+```{r, eval=FALSE}
 View(data)
 ```
 
@@ -144,7 +144,7 @@ object (recommended) and come back to it later you can sort out what happened
 any of it that, there are built in helper functions that let you get your data out in 
 a more easily usable dataframe format. So lets take a look at those. 
 
-```{r, cache=TRUE}
+```{r, cache=TRUE, eval=c(1,2)}
 clicks <- getClickData(data)
 str(clicks)
 View(clicks)
@@ -243,7 +243,7 @@ More info on other ways to add GPS here:
 https://taikisan21.github.io/PAMpal/NextStepsProcessing.html#adding-gps-data
 
 
-```{r, cache=TRUE}
+```{r, cache=TRUE, eval=1}
 data <- addGps(data)
 View(getClickData(data[[1]]))
 ```
@@ -252,7 +252,7 @@ Now we can download some data. Just like other PAMpal functions, we try to make 
 user friendly where it can be, so we have some starter dataset ideas. If you arent 
 sure what you want it pops up a menu. Let's look for some SST data.
 
-```{r}
+```{r, eval=FALSE}
 data <- matchEnvData(data)
 ```
 
@@ -263,7 +263,7 @@ function can also work on just dataframes, see examples here:
 
 https://taikisan21.github.io/PAMpal/NextStepsProcessing.html#adding-environmental-data
 
-```{r}
+```{r, eval=FALSE}
 getMeasures(data)
 ```
 Also works with existing netcdf files (some restrictions may apply, mostly coordinate axis
@@ -281,7 +281,7 @@ photosynthetically available radiation.
 NOTE currently a bug in CRAN version that causes issues with datasets that have no
 time component, fixed in PAMmisc v1.8.1 not yet on CRAN only on GitHub
 
-```{r}
+```{r, eval=FALSE}
 data <- matchEnvData(data, nc='erdMWpar01day')
 getMeasures(data)
 ```
@@ -292,5 +292,5 @@ we want to make this easy. Currently we only support BANTER, but the plan is to 
 other models that we want to work with and are useful and add more export_MODEL functions
 
 ```{r, cache=TRUE}
-banterData <- export_banter(data)
+banterData <- export_banter(data, training=TRUE)
 ```
