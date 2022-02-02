@@ -11,66 +11,88 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## PAMpal Introduction
 
-PAMpal was created to make it easier to load PAMGuard data into R
-where we can work with it. The main goals are to make this (1) easier
-to do, especially for users with less programming experience, and (2)
-to make this process more standardized so that it is easier to share
-and compare results, and to build tools that will work for more people
-without having to rebuild them every time. We have an extensive tutorial
-website with lots more information on everything we will talk about
-today and more:
+PAMpal was created to make it easier to work with data collected using PAMGuard.
+The main goals of PAMpal are (1) to develop a standardized approach to processing
+data post-PAMGuard that allows you to more readily share and compare results and 
+simplifies reproducibility, (2) to create a standardized data structure that allows
+us to develop tools that will work for more users without having to rebuild them
+every time, and (3) to make this entire process easier to do, especially for users
+with less programming experience. We have an extensive tutorial website with more
+details on everything covered in this workshop and more:
 
 https://taikisan21.github.io/PAMpal/
 
-Goal for this workshop is to show you the basics of getting a dataset
-processed with PAMpal, show what that data looks like and how you can 
-use it, then show off some of the useful things that PAMpal can do to
-make your life easier. Finally we'll show how PAMpal integrates with
-BANTER to transition on to Eric's half.
+The goal for this workshop is to guide you through the basics of processing a dataset
+with PAMpal, first with a sample dataset (today), then with your own dataset (next week).
+We'll take a look at the PAMpal data structure, then show off some of the useful 
+things that PAMpal can do to make your life easier. Finally we'll show how PAMpal integrates with
+BANTER to create an acoustic classifier. This tutorial will be paired with the
+BANTER tutorial, led by Eric Archer.
 
-A basic PAMpal analysis consists of two parts - first a preparatory
-step where we tell PAMpal what we want to do, and then a second step
+## Analysis Introduction
+
+The basic PAMpal analysis consists of two parts. First, a preparatory
+step where we tell PAMpal what data we want to analyse, and how we want
+those data to be processed. Second, a processing step
 where it then goes and does all the work (which might take a long time).
-PAMpal reads in all your PAMGuard detections, then applies a set of standard
-processing functions to them that get you some basic measures of the properties
-of your clicks, whistles, etc.
+In this second step, PAMpal reads in all your PAMGuard detections, then applies a set of standard
+processing functions to them that measure the properties of your detections (peak
+frequency of clicks, slope of whistle contours, etc.).
 
-A main goal of PAMpal is to make everything as user friendly as possible,
-so there are a lot of functions where if you don't provide it information it
-needs it will ask for it in a pop-up diaolgue. Here we'll do the first step,
-creating a PAMpalSettings object, fully through interactive popups.
+In order to make PAMpal as user friendly as possible, many functions will prompt
+you for missing information using a pop-up dialogue or ask you to enter values in
+the console. Note that pop-ups can occasionally appear behind your RStudio session and 
+you may need to use Alt+Tab to find them, and the console can be easily reached
+with the shortcut CTRL+2.
 
-This will start with two pop-ups asking to point toward our database and binary
-files (sometimes these appear behind your RStudio session, may need to Alt+Tab
-to find them), then it will ask us to set some parameters for the processing functions.
-More information on the specifics of that can be found here:
+## Preparing Analysis - Create a PAMpalSettings Object
+
+The first step consists of creating a PAMpalSettings object using the function
+`PAMpalSettings`. Running this function without any inputs will cause 3 dialogues
+to appear. first, asking to identify our database files. Second, asking us to identify
+the folder containing our binary files. Third, asking us to enter parameter values for
+the function that processes the clicks (or hitting ENTER to accept defaults). The four
+parameters are:
+
+1. `sr_hz` - the sample rate for the click detector. This can usually be left as the default
+`"auto"`, but if your click detector ran on decimated data enter that sample rate here
+2. `filterfrom_khz` - the lower bound (in kHz) of a highpass/bandwidth filter
+3. `filterto_khz` - the upper bound (in kHz) of a bandwidth filter, or left as default (`NULL`)
+for a highpass filter
+4. `winLen_sec` - the window length (in seconds) to use for the FFT
+
+More information on these parameters and the other standard processing functions that
+do not require you to specify values can be found here:
 
 https://taikisan21.github.io/PAMpal/StandardCalcs.html
 
 ```{r eval=1}
 library(PAMpal)
+# Providing no arguments will bring up pop-ups
 pps <- PAMpalSettings()
 ```
 
-We're also going to be adding some XML settings from PAMGuard.  This mainly
-helps PAMpal keep track of which samplerate goes with which detector, but
+Some of the settings needed for processing our data is stored within PAMGuard, but is 
+not saved in the database or binary files. There is an option to export these settings
+to an XML file, and we can add these to our PAMpalSettings object.
+This mainly helps PAMpal keep track of which samplerate goes with which detector, but
 it also keeps a record of all your PAMGuard settings attached to your analysis
 for future reference. More information on that here (this is an optional but recommended step):
 
 https://taikisan21.github.io/PAMpal/PAMpalSettings.html
 
-
 ```{r, eval=FALSE}
 pps <- addSettings(pps, 'XMLSettings.xml')
 ```
 
-That's all for the preparation step, but just want to show how you can also do this without
-interacting with any pop-ups. This is important if you just want to create a script that you
-can run from start to finish, and its generally good practice to have more of a written 
-record of what you did. Your most frequent collaborator is usually your past self, so its
-nice if they left you some bread crumbs.
+While the pop-ups are a user-friendly approach to using PAMpal, they can be avoided 
+if you just want to create a script that you can run from start to finish (it is 
+generally good practice to have a written record of what you did). Your most frequent collaborator
+is usually your past self, so its nice if they left you some bread crumbs. Here is an alternate
+approach that avoids all pop-ups by providing all information as named arguments:
 
 ```{r}
+# avoid popups by specifying all arguments
 db <- list.files('./Databases/', pattern='sqlite', full.names=TRUE)
 bin <- './Binary/'
 pps <- PAMpalSettings(db=db, binaries = bin,
@@ -78,116 +100,135 @@ pps <- PAMpalSettings(db=db, binaries = bin,
                       settings = 'XMLSettings.xml')
 ```
 
+The PAMpalSettings object contains all the information PAMpal needs to start processing our data. 
+It knows which files to process, and which functions to apply to the detections found in those files. 
+It can also be modified before you begin the time-consuming processing step, more info on that here:
+
+https://taikisan21.github.io/PAMpal/PAMpalSettings.html
+
+## Preparing Analysis - Organizing Data into Events
+
 One last thing before we process our data, we need to know how your data are organized. It
 generally is useful to have your data broken into some distinct pieces rather than just one
 giant blob of information, we call these discrete chunks "events". There are 3 options for how you
-can specify events. First, you can specify these within the PAMGuard database. If you have marked 
-out specific detections using either the Detection Group Localiser, or the Event functionality 
-built into the Click Detector, PAMpal can use those and will only process those specific detections. 
-Second, you can tell PAMpal the start and end times of events with a CSV or dataframe. Then it will
+can specify events: 
+
+1. `mode='db'` - Specify events within the PAMGuard database  using either the Detection Group Localiser
+or the Event functionality built into the Click Detector. PAMpal will only process those specific detections
+you have marked out.
+2. `'mode='recording'` - You can just have events organized by recording file. This is
+kind of the only option if you just want to read in everything and figure it out later, but it still
+provides some basic level of organization. 
+3. `mode='time'` - Provide PAMpal with the start and end times of events with a CSV or dataframe. PAMpal will then
 read in every detection between those start and end times. This is a lot less manual work, but means
 that you are likely to have a lot of noise since it is just taking everything. This is the option
-we'll show for this workshop. Finally, you can just have events organized by recording file. This is
-kind of the only option if you just want to read in everything and figure it out later, but it still
-provides some basic level of organization. More details for information required for the event
-grouping CSV can be found here:
+we'll show for this workshop. More details for information required for the event grouping CSV can be found here:
 
 https://taikisan21.github.io/PAMpal/TimeGrouping.html
 
-Now that we've decided that, we're ready to let PAMpal do its thing. The "id" here is optional, and 
+```{r, eval=c(2,3)}
+# our events for processing with mode='time'
+events <- read.csv('TrainingEvents.csv', stringsAsFactors = FALSE)
+str(events)
+View(events)
+```
+
+## Processing Your Data
+
+Now that our events are organized, we're ready to let PAMpal do its thing. The `id` argument here is optional, and 
 serves no purpose other than attaching an informative name to your data to help you keep track of
 what was going on. This processing can take quite a long time (here we are working on ~1M detections),
-so I recommend that you save this object.
+so I recommend that you save this object once it is finished.
 
-```{r, eval=1}
-events <- read.csv('TrainingEvents.csv', stringsAsFactors = FALSE)
-View(events)
+```{r, eval=FALSE}
 data <- processPgDetections(pps, mode='time', grouping=events, id='PSAWIII_Training')
 # saveRDS(data, file='PSAW_AcousticStudy_Training.rds')
 ```
 
-Just loading in already processed data, but we'll need one extra step for this.
-Sometimes PAMpal needs to access some of the files used, but it stores locations
-at the time of processing which is different than now. So we need to use this function
-to update those names to your computer for these examples to work for you.
-
-Should get a message 17/17 DB 1299/1299 binaries
-
-Instead of waiting for processing, lets just load in a file that was saved earlier. There's one
-step we'll need to do here to make sure that all PAMpal functions will work properly. A lot
-of functions in PAMpal need to be able to read from either the database or binary files, so
-PAMpal keeps track of the locations of files it has processed to make this happen. But this
-doesn't work if I've processed a file on my computer and then send it over to someone else,
-so the function `updateFiles` will try to fix that if you tell it where you have the same 
-files on your computer. This should give you a message that 17/17 and 1299/1299 missing files
-were updated.
+To save time during the workshop, we will instead load data that was processed earlier. This
+will require one other brief step to update the processed data. Many PAMpal functions must read
+from the database and binary files, so PAMpal keeps track of the file locations during processing.
+If we load data that was processed on another computer, these locations are no longer valid, but
+we can use the `updateFiles` function to identify the location of the files on your computer. This
+should give you a message that 17/17 and 1299/1299 missing files were updated.
 
 ```{r, cache=TRUE}
 data <- readRDS('PSAW_AcousticStudy_Training.rds')
+# these are the new locations of database and binary files
 db <- list.files('./Databases/', pattern='sqlite', full.names=TRUE)
 bin <- './Binary/'
 data <- updateFiles(data, db=db, bin = bin)
 data
 ```
 
+## PAMpal Data Structure and Getting Dataframes
+
 Okay, so lets take a look at what we have. 
 
 ```{r, eval=FALSE}
+# View our AcousticStudy, which contains our AcousticEvents, which contain our detections
 View(data)
 ```
 
-Structure is quite complicated, this mostly enables PAMpal to do more complicated
-things later, and also does some record keeping for us. Keeps tracks of what files 
-we processed, how we processed them, and a timestamp so that if you save this 
-object (recommended) and come back to it later you can sort out what happened 
-(Shannon can confirm that this is a useful feature). Luckily you dont have to worry about
-any of it that, there are built in helper functions that let you get your data out in 
+The structure of our AcousticStudy is quite complicated, which will enable PAMpal to do
+fancier things later. This structure also does some record keeping for us: it keeps track
+of the files we processed, how we processed them, and provides a timestamp so that if you
+save this object (recommended) and come back to it at a later you can sort out what happened
+(Shannon can confirm that this is a useful feature). Luckily you don't have to worry about
+any of that, there are built in helper functions that let you get your data out in 
 a more easily usable dataframe format. So lets take a look at those. 
 
-```{r, cache=TRUE, eval=c(1,2)}
+```{r, cache=TRUE, eval=c(2,3)}
+# Get all clicks in a dataframe
 clicks <- getClickData(data)
 str(clicks)
 View(clicks)
+# dataframes for whistle and cepstrum detections
 whistles <- getWhistleData(data)
 cepstrum <- getCepstrumData(data)
 ```
 
-These are easy to work with like any other data frame, we can easily make plots. Lets 
-take a look at the distribution of peak frequencies of our clicks.
+These are like any other dataframe, lets plot the distribution of the peak
+frequencies for our click detections
 
 ```{r, cache=TRUE}
 library(ggplot2)
 ggplot(clicks, aes(x=peak)) +
     geom_density()
 ```
-That seems curious. Lets dig in to that a bit. Remember that we had "species" in our csv earlier,
-I want to take a look at events of a specific species.
+
+## Further Analysis - Average Spectrum
+
+That 40kHz peak seems curious. I want to find events of a specific species using the `species` 
+function (we assigned these in our event CSV earlier)
 
 ```{r}
-# If we did event by db
+# If we did event by db we would need to assign species first
 # data <- setSpecies(data, method='pamguard')
 species(data)
 ```
 
-I know that lags can have stereotyped clicks, so lets focus on a lag event. I want to look at
-an average spectrum of the lag clicks to see if I can see the pattern I would expect, or see
-why we have such an odd peak around 40kHz. Note that this function has a ton of options, find
-out more at:
+Lags can have stereotyped clicks, so lets focus on a lag event. I want to use the
+`calculateAverageSpectra` function to see if their clicks show the pattern I would
+expect, or see if we can find out more about the 40kHz peak. Note that this function has a 
+ton of options, find out more at:
 
 https://taikisan21.github.io/PAMpal/AvgSpec.html
 
-For now we'll just use all the default options and create one for a single event, AC175.
+Let's create the average spectrum plot and concatenated click spectrogram plots for one of the
+lag events, AC175, by setting `evNum='AC175'`
 
 ```{r, cache=TRUE}
 avSpec <- calculateAverageSpectra(data, evNum='AC175')
 ```
 
-Thats not great, looks like we have a lot of echosounder detections mixed in with actual clicks.
-This is one of the drawbacks of using a CSV to organize our events, but lets see if we
-can do something about that. One parameter that comes with the standard click measurements
-is the bandwidth of the click. This basically measures how pointy the spectrum is around the
-peak, and I think that an echosounder should be more pointy (lower bandwidth) than our
-critter sounds. Let's see if that ends up being true.
+## Further Analysis - Filtering Echosounder Detections
+
+That plot looks like we might have a lot of echosounder detections mixed in with actual clicks.
+If we can find some characteristics that are specific to those echosounders, we can try to 
+remove them using PAMpal's `filter` function. PAMpal calculates the bandwidth for each click,
+which I think should be lower for echosounders than for critter sounds. Let's see if that
+ends up being true.
 
 ```{r, cache=TRUE, fig.height=7, fig.width=7}
 # Getting data for just this event 
@@ -197,66 +238,74 @@ plot(clicks175$BW_10dB, xaxs='i')
 # Lines at 3 and 4khz BW
 lines(x=c(0, nrow(clicks175)), y=c(3,3), lwd=2, col='red')
 lines(x=c(0, nrow(clicks175)), y=c(4,4), lwd=2, col='darkgreen')
+# Changed plotting options to only show the first plot
 calculateAverageSpectra(data, evNum='AC175', plot=c(TRUE, FALSE))
 ```
 
-PAMpal has a filter function, if you're familiar with the `dplyr` package the syntax is
+If you're familiar with the dplyr package the syntax for PAMpal's `filter` is
 exactly the same. It works on any of the parameters we calculate during the processing,
 and also a few other special cases. See here for more info:
 
 https://taikisan21.github.io/PAMpal/NextStepsProcessing.html#filtering-data
 
-Here lets filter out only higher bandwidth clicks based on our plot above and see how that looks.
+Here lets filter out lower bandwidth clicks based on our plot above and see how that looks.
 
 ```{r, cache=TRUE}
 highBW <- filter(data, BW_10dB >= 3.5)
 calculateAverageSpectra(highBW, evNum='AC175')
 ```
 
-Looking much better! This has removed most of the echosounder clicks (you could try increasing
-the filter value if you want to try and get them all), and in the average spectrum we can see
-peaks around the areas we expect for this species (~22, 27, and 38-40kHz). Lets try grouping all
-of our lag events together to see if they all show a consistent pattern. The `calculateAverageSpectra`
-function also stores the data for you so that you can work with it later if needed, so lets
-pass that to a function in the PAMmisc package that tries to find peaks and troughs in the data.
-You might get a warning here, and your plots from `calculateAverageSpectra` might look slightly different.
-There was a bug that has been fixed v0.15.2 (not yet on CRAN, only GitHub).
+Looking much better! This has removed most of the echosounder clicks, and in the average 
+spectrum we can see other peaks.
 
+`calculateAverageSpectra` also stores this data so that you can analyse it further if you want 
+to, lets create an average spectrum for all the lag events we have and pass those to another function.
+The `peakTrough` function from the PAMmisc package will look for multiple peaks in our spectrum and
+we can compare those to values we expect for this species (~22, 27, and 38-40kHz)
+
+You might get a warning here, and your plots from `calculateAverageSpectra` might look slightly different.
+There was a bug that has been fixed v0.15.2 (not yet on CRAN at time of workshop, only GitHub).
 
 ```{r, cache=TRUE}
+# Use piping operator %>% to filter for only Lag events and calculate avg spec
 avSpec <- highBW %>% 
     filter(species == 'L_obliquidens') %>% 
     calculateAverageSpectra(evNum=1:3)
+# Stored average spectrum data can be used in other functions
 PAMmisc::peakTrough(cbind(avSpec$freq/1e3, avSpec$avgSpec), plot=TRUE, freqBounds=c(5,20))
 ```
 
-
-Lookin pretty good! Those three peak values are right around where we'd expect (the highest peak
-is a little awkward because it is similar to the echosounder), and the plot is much smoother
-now that we've added a lot more detections.
+## Further Analysis - Adding GPS & Environmental Data
 
 Lets try something else that is usually a lot of work, trying to get environmental data. This requires
 that we know what GPS coordinates our detections occurred at, so first lets tell PAMpal to match that
 up. In this case we have that data in our databases in the "gpsData" table, so its really easy.
 More info on other ways to add GPS here:
 
+Adding environmental data can be a pain, let's see how PAMpal can help. First we need to associate
+GPS coordinates with our detections, which we can do with the `addGps` function. Here our GPS is 
+available in the "gpsData" table in our databases, but if yours is not see other ways to add GPS here:
+
 https://taikisan21.github.io/PAMpal/NextStepsProcessing.html#adding-gps-data
 
-
-```{r, cache=TRUE, eval=1}
+```{r, cache=TRUE, eval=2}
+# This will load in GPS from "gpsData" table in DBs
 data <- addGps(data)
+# Check that it added to all of our detections
 View(getClickData(data[[1]]))
 ```
 
-Now we can download some data. Just like other PAMpal functions, we try to make this 
-user friendly where it can be, so we have some starter dataset ideas. If you arent 
-sure what you want it pops up a menu. Let's look for some SST data.
+Now we can get some environmental data with the `matchEnvData` function. If you aren't
+sure what you want, PAMpal lists some starter dataset ideas you can choose from. Let's
+look for some SST data. We select the dataset by typing in the number, then say
+yes or no to downloading each variable within that dataset.
 
 ```{r, eval=FALSE}
+# This lists 7 datasets in the console for you to select from, lets get #2 for some SST
 data <- matchEnvData(data)
 ```
 
-This is stored as a single value for each event (environmental variables don't typically
+This downloads a single value for each event (environmental variables don't typically
 change on a fast enough scale to warrant matching a new value to every single detection
 within an event). If you absolutely need things at an individual detection level, this
 function can also work on just dataframes, see examples here:
@@ -266,17 +315,24 @@ https://taikisan21.github.io/PAMpal/NextStepsProcessing.html#adding-environmenta
 ```{r, eval=FALSE}
 getMeasures(data)
 ```
-Also works with existing netcdf files (some restrictions may apply, mostly coordinate axis
-naming/format - tell me if yours doesnt work and I can add checks for it)
+
+Also works with existing Netcdf files by providing the file name to the `nc` argument
+(some restrictions may apply, mostly coordinate axis
+naming/format - please tell me if yours doesn't work and I can make it work!)
 
 ```{r}
+# adding from an already downloaded Netcdf file
 data <- matchEnvData(data, nc = 'DepthGradient.nc')
+# This shows what environmental data we have for each event
 getMeasures(data)
 ```
 
 AND it works for basically any dataset on ERDDAP. Easiest if it is on the upwell server,
-but others can work (see website for info). Here's a random one I chose,
-photosynthetically available radiation.
+but any ERDDAP can work (see link above). Just provide the ERDDAP dataset ID to the `nc`
+argument, here's a random dataset I chose for photosynthetically available radiation. Link 
+to upwell ERDDAP server, PAMpal can work with all griddap datasets:
+
+https://upwell.pfeg.noaa.gov/erddap/index.html
 
 NOTE currently a bug in CRAN version that causes issues with datasets that have no
 time component, fixed in PAMmisc v1.8.1 not yet on CRAN only on GitHub
@@ -286,10 +342,18 @@ data <- matchEnvData(data, nc='erdMWpar01day')
 getMeasures(data)
 ```
 
-Last step before we go, we want to export data for a BANTER model. A major pain point
+## Further Analysis - Export for BANTER
+
+Finally, lets export data for a BANTER model using the `export_banter` function. A major pain point
 for implementing a lot of models is actually getting your data formatted properly, so 
 we want to make this easy. Currently we only support BANTER, but the plan is to find 
-other models that we want to work with and are useful and add more export_MODEL functions
+other models that we want to work with and are useful and add more `export_MODEL` functions.
+Here the flag `training=TRUE` indicates that this dataset is for training a model, which
+has certain restrictions. We get a summary of our data, and some warnings about insufficient events.
+We can set `training=FALSE` for future datasets we want to use for prediction. More info on this 
+function:
+
+https://taikisan21.github.io/PAMpal/NextStepsProcessing.html#exporting-for-banter-model
 
 ```{r, cache=TRUE}
 banterData <- export_banter(data, training=TRUE)
